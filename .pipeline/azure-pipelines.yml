@@ -140,7 +140,7 @@ stages:
                     appType: 'webAppLinux'
                     appName: 'yourbus-back-dev'
                     package: '$(Pipeline.Workspace)/backend-package/*.zip'
-                    runtimeStack: 'NODE|20-lts'
+                    runtimeStack: 'NODE|22-lts'
                     startUpCommand: 'npm ci --omit=dev && npm start'
                     appSettings: >
                       -NODE_ENV development
@@ -173,7 +173,7 @@ stages:
                     appType: 'webAppLinux'
                     appName: 'yourbus-back-qa'
                     package: '$(Pipeline.Workspace)/backend-package/*.zip'
-                    runtimeStack: 'NODE|20-lts'
+                    runtimeStack: 'NODE|22-lts'
                     startUpCommand: 'npm ci --omit=dev && npm start'
                     appSettings: >
                       -NODE_ENV qa
@@ -215,7 +215,7 @@ stages:
                     appType: 'webAppLinux'
                     appName: 'yourbus-back-prod'
                     package: '$(Pipeline.Workspace)/backend-package/*.zip'
-                    runtimeStack: 'NODE|20-lts'
+                    runtimeStack: 'NODE|22-lts'
                     startUpCommand: 'npm ci --omit=dev && npm start'
                     appSettings: >
                       -NODE_ENV production
