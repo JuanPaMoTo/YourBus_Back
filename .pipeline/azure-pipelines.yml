@@ -1,0 +1,215 @@
+# .pipeline/azure-pipelines.yml — YourBus_Back
+#
+# Flujo DevOps: 3 etapas secuenciales (Compile/Build -> Package -> Deploy).
+# La etapa Deploy promueve el mismo artefacto por DEV -> QA -> PROD.
+# QA corre pruebas de integración adicionales antes de habilitar el paso a PROD.
+#
+# Requisitos previos en Azure DevOps (se configuran una vez, en el portal):
+#   - 3 "Environments": yourbus-back-dev, yourbus-back-qa, yourbus-back-prod
+#   - En yourbus-back-qa y yourbus-back-prod: "Approval check" (aprobación
+#     manual) para evitar despliegues a PROD sin revisión humana.
+#   - Service connection de Azure llamada "AzureServiceConnection".
+#   - App Services (Linux, Node 20) creados por entorno:
+#     yourbus-back-dev / yourbus-back-qa / yourbus-back-prod
+#   - Variable de pipeline secreta CORS_ORIGIN_<ENV> por entorno (Library),
+#     usada para configurar el App Setting CORS_ORIGIN en cada despliegue.
+
+trigger:
+  branches:
+    include:
+      - main
+  paths:
+    exclude:
+      - '*.md'
+
+pr:
+  branches:
+    include:
+      - main
+
+variables:
+  nodeVersion: '20.x'
+
+stages:
+
+  # ---------------------------------------------------------------------
+  # 1) COMPILE / BUILD — instala dependencias y corre Quality Gates
+  # ---------------------------------------------------------------------
+  - stage: Build
+    displayName: '1. Compile / Build'
+    jobs:
+      - job: BuildAndValidate
+        displayName: 'Instalar, analizar y probar'
+        pool:
+          vmImage: 'ubuntu-latest'
+        steps:
+          - task: NodeTool@0
+            inputs:
+              versionSpec: $(nodeVersion)
+            displayName: 'Usar Node.js $(nodeVersion)'
+
+          - script: npm ci
+            displayName: 'npm ci'
+
+          # --- Quality Gate: análisis estático de código ---
+          - script: npm run lint
+            displayName: 'Quality Gate: lint (eslint)'
+
+          # --- Quality Gate: pruebas unitarias/integración + cobertura ---
+          - script: npm test -- --ci
+            displayName: 'Quality Gate: pruebas (jest + supertest)'
+
+          - task: PublishTestResults@2
+            condition: succeededOrFailed()
+            inputs:
+              testResultsFormat: 'JUnit'
+              testResultsFiles: 'test-results/*.xml'
+              testRunTitle: 'YourBus_Back - Unit & Integration Tests'
+
+          - task: PublishCodeCoverageResults@2
+            condition: succeededOrFailed()
+            inputs:
+              summaryFileLocation: '$(System.DefaultWorkingDirectory)/coverage/cobertura-coverage.xml'
+
+          # No se compila a binario (Node es interpretado): "compilar" aquí
+          # significa validar que la app arranca sin errores de sintaxis/carga.
+          - script: node -e "require('./src/app.js'); console.log('OK: la app carga correctamente')"
+            displayName: 'Verificar que la app carga sin errores'
+
+          - publish: '$(System.DefaultWorkingDirectory)'
+            artifact: 'backend-source'
+            displayName: 'Publicar código fuente validado'
+
+  # ---------------------------------------------------------------------
+  # 2) PACKAGE — empaqueta la app (sin node_modules) lista para desplegar
+  # ---------------------------------------------------------------------
+  - stage: Package
+    displayName: '2. Package'
+    dependsOn: Build
+    condition: succeeded()
+    jobs:
+      - job: PackageArtifact
+        displayName: 'Empaquetar backend'
+        pool:
+          vmImage: 'ubuntu-latest'
+        steps:
+          - download: current
+            artifact: 'backend-source'
+
+          - task: ArchiveFiles@2
+            displayName: 'Comprimir código + package.json en zip versionado'
+            inputs:
+              rootFolderOrFile: '$(Pipeline.Workspace)/backend-source'
+              includeRootFolder: false
+              archiveType: 'zip'
+              archiveFile: '$(Build.ArtifactStagingDirectory)/yourbus-back-$(Build.BuildId).zip'
+              replaceExistingArchive: true
+              # node_modules, coverage y tests no productivos ya quedaron
+              # fuera del artefacto porque Build solo publicó código fuente.
+
+          - publish: '$(Build.ArtifactStagingDirectory)/yourbus-back-$(Build.BuildId).zip'
+            artifact: 'backend-package'
+            displayName: 'Publicar paquete final'
+
+  # ---------------------------------------------------------------------
+  # 3) DEPLOY — promoción secuencial DEV -> QA -> PROD
+  # ---------------------------------------------------------------------
+  - stage: Deploy_DEV
+    displayName: '3. Deploy - DEV'
+    dependsOn: Package
+    condition: succeeded()
+    jobs:
+      - deployment: DeployDev
+        displayName: 'Desplegar a DEV'
+        environment: 'yourbus-back-dev'
+        pool:
+          vmImage: 'ubuntu-latest'
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - task: AzureWebApp@1
+                  displayName: 'Desplegar en Azure App Service (DEV)'
+                  inputs:
+                    azureSubscription: 'AzureServiceConnection'
+                    appType: 'webAppLinux'
+                    appName: 'yourbus-back-dev'
+                    package: '$(Pipeline.Workspace)/backend-package/*.zip'
+                    runtimeStack: 'NODE|20-lts'
+                    startUpCommand: 'npm ci --omit=dev && npm start'
+                    appSettings: >
+                      -NODE_ENV development
+                      -CORS_ORIGIN $(CORS_ORIGIN_DEV)
+
+  - stage: Deploy_QA
+    displayName: '3. Deploy - QA'
+    dependsOn: Deploy_DEV
+    condition: succeeded()
+    jobs:
+      - deployment: DeployQA
+        displayName: 'Desplegar a QA y validar'
+        environment: 'yourbus-back-qa'
+        pool:
+          vmImage: 'ubuntu-latest'
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - task: AzureWebApp@1
+                  displayName: 'Desplegar en Azure App Service (QA)'
+                  inputs:
+                    azureSubscription: 'AzureServiceConnection'
+                    appType: 'webAppLinux'
+                    appName: 'yourbus-back-qa'
+                    package: '$(Pipeline.Workspace)/backend-package/*.zip'
+                    runtimeStack: 'NODE|20-lts'
+                    startUpCommand: 'npm ci --omit=dev && npm start'
+                    appSettings: >
+                      -NODE_ENV qa
+                      -CORS_ORIGIN $(CORS_ORIGIN_QA)
+
+                # --- Quality Gate de QA: pruebas contra la API ya desplegada ---
+                - script: |
+                    echo "Verificando health check en QA..."
+                    curl -sSf https://yourbus-back-qa.azurewebsites.net/health || exit 1
+                    echo "Verificando endpoint /api/rutas en QA..."
+                    curl -sSf https://yourbus-back-qa.azurewebsites.net/api/rutas || exit 1
+                  displayName: 'Quality Gate QA: pruebas de humo sobre la API desplegada'
+
+                # Punto de extensión: aquí se agregarían pruebas de integración
+                # o contract testing (Postman/Newman) contra la URL real de QA
+                # antes de habilitar la promoción a PROD.
+
+  - stage: Deploy_PROD
+    displayName: '3. Deploy - PROD'
+    dependsOn: Deploy_QA
+    condition: succeeded()
+    jobs:
+      # Este job solo arranca si el "Approval check" configurado en el
+      # environment 'yourbus-back-prod' es aprobado manualmente en Azure DevOps.
+      - deployment: DeployProd
+        displayName: 'Desplegar a PROD'
+        environment: 'yourbus-back-prod'
+        pool:
+          vmImage: 'ubuntu-latest'
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - task: AzureWebApp@1
+                  displayName: 'Desplegar en Azure App Service (PROD)'
+                  inputs:
+                    azureSubscription: 'AzureServiceConnection'
+                    appType: 'webAppLinux'
+                    appName: 'yourbus-back-prod'
+                    package: '$(Pipeline.Workspace)/backend-package/*.zip'
+                    runtimeStack: 'NODE|20-lts'
+                    startUpCommand: 'npm ci --omit=dev && npm start'
+                    appSettings: >
+                      -NODE_ENV production
+                      -CORS_ORIGIN $(CORS_ORIGIN_PROD)
+
+                - script: |
+                    echo "Verificando health check en PROD..."
+                    curl -sSf https://yourbus-back-prod.azurewebsites.net/health || exit 1
+                  displayName: 'Verificación post-despliegue en PROD'
