@@ -1,0 +1,17 @@
+node_modules
+dist
+coverage
+test-results
+.env
+.env.local
+*.log
+npm-debug.log*
+
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+
+*.test
+*.test.*
+!tests/*.test.js
