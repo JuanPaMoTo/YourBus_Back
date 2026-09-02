@@ -1,16 +1,31 @@
-const { rutas } = require('../data/store');
+const mongoose = require('mongoose');
+const { Ruta } = require('../models');
 
-function listarRutas(req, res) {
-  res.json(rutas);
+async function listarRutas(req, res, next) {
+  try {
+    const rutas = await Ruta.find().sort({ codigo: 1 });
+    res.json(rutas);
+  } catch (err) {
+    next(err);
+  }
 }
 
-function estadoRuta(req, res) {
-  const { rutaId } = req.params;
-  const ruta = rutas.find((r) => r.id === rutaId || r.codigo === rutaId);
-  if (!ruta) {
-    return res.status(404).json({ error: 'Ruta no encontrada' });
+async function estadoRuta(req, res, next) {
+  try {
+    const { rutaId } = req.params;
+    const where = mongoose.isValidObjectId(rutaId) ? { _id: rutaId } : { codigo: rutaId };
+    const ruta = await Ruta.findOne(where);
+    if (!ruta) {
+      return res.status(404).json({ error: 'Ruta no encontrada' });
+    }
+    res.json({
+      ruta: ruta.codigo,
+      estado: ruta.estado,
+      ultimaActualizacion: ruta.updatedAt,
+    });
+  } catch (err) {
+    next(err);
   }
-  res.json({ ruta: ruta.codigo, estado: 'operativa', ultimaActualizacion: new Date().toISOString() });
 }
 
 module.exports = { listarRutas, estadoRuta };

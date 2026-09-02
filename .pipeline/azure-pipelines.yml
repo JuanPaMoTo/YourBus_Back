@@ -1,4 +1,22 @@
 # .pipeline/azure-pipelines.yml — YourBus_Back
+#
+# Flujo DevOps: 3 etapas secuenciales (Compile/Build -> Package -> Deploy).
+# La etapa Deploy promueve el mismo artefacto por DEV -> QA -> PROD.
+# QA corre pruebas de integración adicionales antes de habilitar el paso a PROD.
+#
+# Requisitos previos en Azure DevOps (se configuran una vez, en el portal):
+#   - 3 "Environments": yourbus-back-dev, yourbus-back-qa, yourbus-back-prod
+#   - En yourbus-back-qa y yourbus-back-prod: "Approval check" (aprobación
+#     manual) para evitar despliegues a PROD sin revisión humana.
+#   - Service connection de Azure llamada "AzureServiceConnection".
+#   - App Services (Linux, Node 20) creados por entorno:
+#     yourbus-back-dev / yourbus-back-qa / yourbus-back-prod
+#   - En MongoDB Atlas: Network Access con 0.0.0.0/0 habilitado (Azure App
+#     Service no tiene IP fija), y una base por entorno dentro del cluster
+#     (yourbus_dev / yourbus_qa / yourbus_prod).
+#   - Variable groups en Library (o variables por Environment) con, por cada
+#     entorno: CORS_ORIGIN_<ENV> y MONGODB_URI_<ENV> (esta última secreta,
+#     con el nombre de base correspondiente al final de la URL).
 
 trigger:
   branches:
@@ -42,8 +60,10 @@ stages:
             displayName: 'Quality Gate: lint (eslint)'
 
           # --- Quality Gate: pruebas unitarias/integración + cobertura ---
+          # Corren contra un MongoDB real pero efímero (mongodb-memory-server),
+          # sin tocar Atlas ni ninguna base de datos real.
           - script: npm test -- --ci
-            displayName: 'Quality Gate: pruebas (jest + supertest)'
+            displayName: 'Quality Gate: pruebas (jest + supertest + mongodb-memory-server)'
 
           - task: PublishTestResults@2
             condition: succeededOrFailed()
@@ -57,16 +77,14 @@ stages:
             inputs:
               summaryFileLocation: '$(System.DefaultWorkingDirectory)/coverage/cobertura-coverage.xml'
 
-          # Corrección de sintaxis en script multinivel
-          - script: |
-              node -e "require('./src/app.js'); console.log('OK: la app carga correctamente')"
+          # No se compila a binario (Node es interpretado): "compilar" aquí
+          # significa validar que la app arranca sin errores de sintaxis/carga.
+          - script: node -e "require('./src/app.js'); console.log('OK: la app carga correctamente')"
             displayName: 'Verificar que la app carga sin errores'
 
-          - task: PublishPipelineArtifact@1
+          - publish: '$(System.DefaultWorkingDirectory)'
+            artifact: 'backend-source'
             displayName: 'Publicar código fuente validado'
-            inputs:
-              targetPath: '$(System.DefaultWorkingDirectory)'
-              artifact: 'backend-source'
 
   # ---------------------------------------------------------------------
   # 2) PACKAGE — empaqueta la app lista para desplegar
@@ -93,14 +111,13 @@ stages:
               archiveFile: '$(Build.ArtifactStagingDirectory)/yourbus-back-$(Build.BuildId).zip'
               replaceExistingArchive: true
 
-          - task: PublishPipelineArtifact@1
+          - publish: '$(Build.ArtifactStagingDirectory)/yourbus-back-$(Build.BuildId).zip'
+            artifact: 'backend-package'
             displayName: 'Publicar paquete final'
-            inputs:
-              targetPath: '$(Build.ArtifactStagingDirectory)/yourbus-back-$(Build.BuildId).zip'
-              artifact: 'backend-package'
 
   # ---------------------------------------------------------------------
   # 3) DEPLOY — promoción secuencial DEV -> QA -> PROD
+  #    Cada entorno apunta a su propia base dentro de Atlas vía MONGODB_URI.
   # ---------------------------------------------------------------------
   - stage: Deploy_DEV
     displayName: '3. Deploy - DEV'
@@ -125,7 +142,15 @@ stages:
                     package: '$(Pipeline.Workspace)/backend-package/*.zip'
                     runtimeStack: 'NODE|20-lts'
                     startUpCommand: 'npm ci --omit=dev && npm start'
-                    appSettings: '-NODE_ENV development -CORS_ORIGIN $(CORS_ORIGIN_DEV)'
+                    appSettings: >
+                      -NODE_ENV development
+                      -CORS_ORIGIN $(CORS_ORIGIN_DEV)
+                      -MONGODB_URI $(MONGODB_URI_DEV)
+
+                - script: |
+                    echo "Verificando health check en DEV..."
+                    curl -sSf https://yourbus-back-dev.azurewebsites.net/health || exit 1
+                  displayName: 'Verificación post-despliegue en DEV'
 
   - stage: Deploy_QA
     displayName: '3. Deploy - QA'
@@ -133,7 +158,7 @@ stages:
     condition: succeeded()
     jobs:
       - deployment: DeployQA
-        displayName: 'Desplegar a QA y validar'
+        displayName: 'Desplegar y validar en QA'
         environment: 'yourbus-back-qa'
         pool:
           vmImage: 'ubuntu-latest'
@@ -150,8 +175,12 @@ stages:
                     package: '$(Pipeline.Workspace)/backend-package/*.zip'
                     runtimeStack: 'NODE|20-lts'
                     startUpCommand: 'npm ci --omit=dev && npm start'
-                    appSettings: '-NODE_ENV qa -CORS_ORIGIN $(CORS_ORIGIN_QA)'
+                    appSettings: >
+                      -NODE_ENV qa
+                      -CORS_ORIGIN $(CORS_ORIGIN_QA)
+                      -MONGODB_URI $(MONGODB_URI_QA)
 
+                # --- Quality Gate de QA: pruebas contra la API ya desplegada ---
                 - script: |
                     echo "Verificando health check en QA..."
                     curl -sSf https://yourbus-back-qa.azurewebsites.net/health || exit 1
@@ -159,11 +188,17 @@ stages:
                     curl -sSf https://yourbus-back-qa.azurewebsites.net/api/rutas || exit 1
                   displayName: 'Quality Gate QA: pruebas de humo sobre la API desplegada'
 
+                # Punto de extensión: aquí se agregarían pruebas de integración
+                # o contract testing (Postman/Newman) contra la URL real de QA
+                # antes de habilitar la promoción a PROD.
+
   - stage: Deploy_PROD
     displayName: '3. Deploy - PROD'
     dependsOn: Deploy_QA
     condition: succeeded()
     jobs:
+      # Este job solo arranca si el "Approval check" configurado en el
+      # environment 'yourbus-back-prod' es aprobado manualmente en Azure DevOps.
       - deployment: DeployProd
         displayName: 'Desplegar a PROD'
         environment: 'yourbus-back-prod'
@@ -182,7 +217,10 @@ stages:
                     package: '$(Pipeline.Workspace)/backend-package/*.zip'
                     runtimeStack: 'NODE|20-lts'
                     startUpCommand: 'npm ci --omit=dev && npm start'
-                    appSettings: '-NODE_ENV production -CORS_ORIGIN $(CORS_ORIGIN_PROD)'
+                    appSettings: >
+                      -NODE_ENV production
+                      -CORS_ORIGIN $(CORS_ORIGIN_PROD)
+                      -MONGODB_URI $(MONGODB_URI_PROD)
 
                 - script: |
                     echo "Verificando health check en PROD..."

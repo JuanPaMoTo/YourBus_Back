@@ -1,26 +1,30 @@
-const { paraderosPorRuta, horariosPorRuta, rutas } = require('../data/store');
+const { Paradero, Horario } = require('../models');
+const { resolverRuta } = require('../utils/resolverRuta');
 
-function resolverIdRuta(rutaParam) {
-  const ruta = rutas.find((r) => r.id === rutaParam || r.codigo === rutaParam);
-  return ruta ? ruta.id : rutaParam;
+async function listarParaderos(req, res, next) {
+  try {
+    const ruta = await resolverRuta(req.params.rutaId);
+    if (!ruta) {
+      return res.status(404).json({ error: 'No hay paraderos para esta ruta' });
+    }
+    const paraderos = await Paradero.find({ rutaId: ruta._id }).sort({ orden: 1 });
+    res.json(paraderos);
+  } catch (err) {
+    next(err);
+  }
 }
 
-function listarParaderos(req, res) {
-  const id = resolverIdRuta(req.params.rutaId);
-  const paraderos = paraderosPorRuta[id];
-  if (!paraderos) {
-    return res.status(404).json({ error: 'No hay paraderos para esta ruta' });
+async function listarHorarios(req, res, next) {
+  try {
+    const ruta = await resolverRuta(req.params.rutaId);
+    if (!ruta) {
+      return res.status(404).json({ error: 'No hay horarios para esta ruta' });
+    }
+    const horarios = await Horario.find({ rutaId: ruta._id });
+    res.json(horarios);
+  } catch (err) {
+    next(err);
   }
-  res.json(paraderos);
-}
-
-function listarHorarios(req, res) {
-  const id = resolverIdRuta(req.params.rutaId);
-  const horarios = horariosPorRuta[id];
-  if (!horarios) {
-    return res.status(404).json({ error: 'No hay horarios para esta ruta' });
-  }
-  res.json(horarios);
 }
 
 module.exports = { listarParaderos, listarHorarios };
