@@ -79,7 +79,8 @@ stages:
 
           # No se compila a binario (Node es interpretado): "compilar" aquí
           # significa validar que la app arranca sin errores de sintaxis/carga.
-          - script: node -e "require('./src/app.js'); console.log('OK: la app carga correctamente')"
+          - script: |
+              node -e "require('./src/app.js'); console.log('OK: la app carga correctamente')"
             displayName: 'Verificar que la app carga sin errores'
 
           - publish: '$(System.DefaultWorkingDirectory)'
