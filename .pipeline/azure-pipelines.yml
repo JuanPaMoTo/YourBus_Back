@@ -150,7 +150,7 @@ stages:
 
                 - script: |
                     echo "Verificando health check en DEV..."
-                    curl -sSf https://yourbus-back-dev.azurewebsites.net/health || exit 1
+                    curl -sSf https://yourbus-back-dev-bqhfb6hghpg3h7a2.chilecentral-01.azurewebsites.net/api/rutas || exit 1
                   displayName: 'Verificación post-despliegue en DEV'
 
   - stage: Deploy_QA
