@@ -149,6 +149,8 @@ stages:
                       -MONGODB_URI $(MONGODB_URI_DEV)
 
                 - script: |
+                    echo "Esperando 30 segundos a que la aplicación inicie en DEV..."
+                    sleep 30
                     echo "Verificando health check en DEV..."
                     curl -sSf https://yourbus-back-dev-bqhfb6hghpg3h7a2.chilecentral-01.azurewebsites.net/api/rutas || exit 1
                   displayName: 'Verificación post-despliegue en DEV'
@@ -183,6 +185,8 @@ stages:
 
                 # --- Quality Gate de QA: pruebas contra la API ya desplegada ---
                 - script: |
+                    echo "Esperando 30 segundos a que la aplicación inicie en QA..."
+                    sleep 30
                     echo "Verificando health check en QA..."
                     curl -sSf https://yourbus-back-qa.azurewebsites.net/health || exit 1
                     echo "Verificando endpoint /api/rutas en QA..."
@@ -224,6 +228,8 @@ stages:
                       -MONGODB_URI $(MONGODB_URI_PROD)
 
                 - script: |
+                    echo "Esperando 30 segundos a que la aplicación inicie en PROD..."
+                    sleep 30
                     echo "Verificando health check en PROD..."
                     curl -sSf https://yourbus-back-prod.azurewebsites.net/health || exit 1
                   displayName: 'Verificación post-despliegue en PROD'
