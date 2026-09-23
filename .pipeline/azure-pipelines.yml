@@ -17,7 +17,7 @@
 #   - Variable groups en Library (o variables por Environment) con, por cada
 #     entorno: CORS_ORIGIN_<ENV> y MONGODB_URI_<ENV> (esta última secreta,
 #     con el nombre de base correspondiente al final de la URL).
-
+ 
 trigger:
   branches:
     include:
@@ -25,17 +25,19 @@ trigger:
   paths:
     exclude:
       - '*.md'
-
+ 
 pr:
   branches:
     include:
       - main
-
+ 
 variables:
-  nodeVersion: '20.x'
-
+  - name: nodeVersion
+    value: '20.x'
+  - group: 'YourBus-Backend-Vars'
+ 
 stages:
-
+ 
   # ---------------------------------------------------------------------
   # 1) COMPILE / BUILD — instala dependencias y corre Quality Gates
   # ---------------------------------------------------------------------
@@ -51,42 +53,42 @@ stages:
             inputs:
               versionSpec: $(nodeVersion)
             displayName: 'Usar Node.js $(nodeVersion)'
-
+ 
           - script: npm ci
             displayName: 'npm ci'
-
+ 
           # --- Quality Gate: análisis estático de código ---
           - script: npm run lint
             displayName: 'Quality Gate: lint (eslint)'
-
+ 
           # --- Quality Gate: pruebas unitarias/integración + cobertura ---
           # Corren contra un MongoDB real pero efímero (mongodb-memory-server),
           # sin tocar Atlas ni ninguna base de datos real.
           - script: npm test -- --ci
             displayName: 'Quality Gate: pruebas (jest + supertest + mongodb-memory-server)'
-
+ 
           - task: PublishTestResults@2
             condition: succeededOrFailed()
             inputs:
               testResultsFormat: 'JUnit'
               testResultsFiles: 'test-results/*.xml'
               testRunTitle: 'YourBus_Back - Unit & Integration Tests'
-
+ 
           - task: PublishCodeCoverageResults@2
             condition: succeededOrFailed()
             inputs:
               summaryFileLocation: '$(System.DefaultWorkingDirectory)/coverage/cobertura-coverage.xml'
-
+ 
           # No se compila a binario (Node es interpretado): "compilar" aquí
           # significa validar que la app arranca sin errores de sintaxis/carga.
           - script: |
               node -e "require('./src/app.js'); console.log('OK: la app carga correctamente')"
             displayName: 'Verificar que la app carga sin errores'
-
+ 
           - publish: '$(System.DefaultWorkingDirectory)'
             artifact: 'backend-source'
             displayName: 'Publicar código fuente validado'
-
+ 
   # ---------------------------------------------------------------------
   # 2) PACKAGE — empaqueta la app lista para desplegar
   # ---------------------------------------------------------------------
@@ -102,7 +104,7 @@ stages:
         steps:
           - download: current
             artifact: 'backend-source'
-
+ 
           - task: ArchiveFiles@2
             displayName: 'Comprimir código + package.json en zip versionado'
             inputs:
@@ -111,11 +113,11 @@ stages:
               archiveType: 'zip'
               archiveFile: '$(Build.ArtifactStagingDirectory)/yourbus-back-$(Build.BuildId).zip'
               replaceExistingArchive: true
-
+ 
           - publish: '$(Build.ArtifactStagingDirectory)/yourbus-back-$(Build.BuildId).zip'
             artifact: 'backend-package'
             displayName: 'Publicar paquete final'
-
+ 
   # ---------------------------------------------------------------------
   # 3) DEPLOY — promoción secuencial DEV -> QA -> PROD
   #    Cada entorno apunta a su propia base dentro de Atlas vía MONGODB_URI.
@@ -147,14 +149,14 @@ stages:
                       -NODE_ENV development
                       -CORS_ORIGIN $(CORS_ORIGIN_DEV)
                       -MONGODB_URI $(MONGODB_URI_DEV)
-
+ 
                 - script: |
                     echo "Esperando 30 segundos a que la aplicación inicie en DEV..."
                     sleep 30
                     echo "Verificando health check en DEV..."
                     curl -sSf https://yourbus-back-dev-bqhfb6hghpg3h7a2.chilecentral-01.azurewebsites.net/api/rutas || exit 1
                   displayName: 'Verificación post-despliegue en DEV'
-
+ 
   - stage: Deploy_QA
     displayName: '3. Deploy - QA'
     dependsOn: Deploy_DEV
@@ -182,7 +184,7 @@ stages:
                       -NODE_ENV qa
                       -CORS_ORIGIN $(CORS_ORIGIN_QA)
                       -MONGODB_URI $(MONGODB_URI_QA)
-
+ 
                 # --- Quality Gate de QA: pruebas contra la API ya desplegada ---
                 - script: |
                     echo "Esperando 30 segundos a que la aplicación inicie en QA..."
@@ -192,11 +194,11 @@ stages:
                     echo "Verificando endpoint /api/rutas en QA..."
                     curl -sSf https://yourbus-back-qa.azurewebsites.net/api/rutas || exit 1
                   displayName: 'Quality Gate QA: pruebas de humo sobre la API desplegada'
-
+ 
                 # Punto de extensión: aquí se agregarían pruebas de integración
                 # o contract testing (Postman/Newman) contra la URL real de QA
                 # antes de habilitar la promoción a PROD.
-
+ 
   - stage: Deploy_PROD
     displayName: '3. Deploy - PROD'
     dependsOn: Deploy_QA
@@ -226,7 +228,7 @@ stages:
                       -NODE_ENV production
                       -CORS_ORIGIN $(CORS_ORIGIN_PROD)
                       -MONGODB_URI $(MONGODB_URI_PROD)
-
+ 
                 - script: |
                     echo "Esperando 30 segundos a que la aplicación inicie en PROD..."
                     sleep 30
