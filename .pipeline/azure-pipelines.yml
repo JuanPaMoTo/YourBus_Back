@@ -144,7 +144,7 @@ stages:
                     appName: 'yourbus-back-dev'
                     package: '$(Pipeline.Workspace)/backend-package/*.zip'
                     runtimeStack: 'NODE|22-lts'
-                    startUpCommand: 'npm ci --omit=dev && npm start'
+                    startUpCommand: 'npm start'
                     appSettings: >
                       -NODE_ENV development
                       -CORS_ORIGIN $(CORS_ORIGIN_DEV)
@@ -179,7 +179,7 @@ stages:
                     appName: 'yourbus-back-qa'
                     package: '$(Pipeline.Workspace)/backend-package/*.zip'
                     runtimeStack: 'NODE|22-lts'
-                    startUpCommand: 'npm ci --omit=dev && npm start'
+                    startUpCommand: 'npm start'
                     appSettings: >
                       -NODE_ENV qa
                       -CORS_ORIGIN $(CORS_ORIGIN_QA)
@@ -187,12 +187,20 @@ stages:
 
                 # --- Quality Gate de QA: pruebas contra la API ya desplegada ---
                 - script: |
-                    echo "Esperando 30 segundos a que la aplicación inicie en QA..."
-                    sleep 30
+                    URL="https://yourbus-back-qa-brepb7hma8g9eqd2.chilecentral-01.azurewebsites.net"
+                    echo "Esperando a que la aplicación inicie en QA (hasta 3 minutos, primer arranque puede tardar)..."
+                    for i in $(seq 1 18); do
+                      if curl -sSf "$URL/health" > /dev/null; then
+                        echo "App arriba después de $((i * 10)) segundos."
+                        break
+                      fi
+                      echo "Intento $i: todavía no responde, reintentando en 10s..."
+                      sleep 10
+                    done
                     echo "Verificando health check en QA..."
-                    curl -sSf https://yourbus-back-qa-brepb7hma8g9eqd2.chilecentral-01.azurewebsites.net/health || exit 1
+                    curl -sSf "$URL/health" || exit 1
                     echo "Verificando endpoint /api/rutas en QA..."
-                    curl -sSf https://yourbus-back-qa-brepb7hma8g9eqd2.chilecentral-01.azurewebsites.net/api/rutas || exit 1
+                    curl -sSf "$URL/api/rutas" || exit 1
                   displayName: 'Quality Gate QA: pruebas de humo sobre la API desplegada'
 
                 # Punto de extensión: aquí se agregarían pruebas de integración
@@ -223,7 +231,7 @@ stages:
                     appName: 'yourbus-back-prod'
                     package: '$(Pipeline.Workspace)/backend-package/*.zip'
                     runtimeStack: 'NODE|22-lts'
-                    startUpCommand: 'npm ci --omit=dev && npm start'
+                    startUpCommand: 'npm start'
                     appSettings: >
                       -NODE_ENV production
                       -CORS_ORIGIN $(CORS_ORIGIN_PROD)
