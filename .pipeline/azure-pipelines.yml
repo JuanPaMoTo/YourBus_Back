@@ -126,10 +126,7 @@ stages:
                     package: '$(Pipeline.Workspace)/backend-package/*.zip'
                     runtimeStack: 'NODE|22-lts'
                     startUpCommand: 'npm start'
-                    appSettings: >
-                      -NODE_ENV development
-                      -CORS_ORIGIN $(CORS_ORIGIN_DEV)
-                      -MONGODB_URI $(MONGODB_URI_DEV)
+                    appSettings: '-PORT "8080" -WEBSITES_PORT "8080" -NODE_ENV "development" -CORS_ORIGIN "$(CORS_ORIGIN_DEV)" -MONGODB_URI "$(MONGODB_URI_DEV)"'
 
                 - script: |
                     echo "Esperando 30 segundos a que la aplicación inicie en DEV..."
@@ -161,10 +158,7 @@ stages:
                     package: '$(Pipeline.Workspace)/backend-package/*.zip'
                     runtimeStack: 'NODE|22-lts'
                     startUpCommand: 'npm start'
-                    appSettings: >
-                      -NODE_ENV qa
-                      -CORS_ORIGIN $(CORS_ORIGIN_QA)
-                      -MONGODB_URI $(MONGODB_URI_QA)
+                    appSettings: '-PORT "8080" -WEBSITES_PORT "8080" -NODE_ENV "qa" -CORS_ORIGIN "$(CORS_ORIGIN_QA)" -MONGODB_URI "$(MONGODB_URI_QA)"'
 
                 # --- Quality Gate de QA: pruebas contra la API ya desplegada ---
                 - script: |
@@ -174,16 +168,17 @@ stages:
                     echo "Esperando a que la aplicación responda en QA (hasta 3 minutos adicionales)..."
                     SUCCESS=0
                     for i in $(seq 1 18); do
-                      if curl -sSf "$URL/api/rutas" > /dev/null; then
-                        echo "App arriba y respondiendo correctamente después de $((30 + i * 10)) segundos."
+                      HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$URL/api/rutas")
+                      if [ "$HTTP_STATUS" -eq 200 ]; then
+                        echo "App arriba y respondiendo HTTP 200 OK en $((30 + i * 10)) segundos."
                         SUCCESS=1
                         break
                       fi
-                      echo "Intento $i: todavía no responde, reintentando en 10s..."
+                      echo "Intento $i: Código HTTP recibido $HTTP_STATUS, reintentando en 10s..."
                       sleep 10
                     done
                     if [ $SUCCESS -ne 1 ]; then
-                      echo "Error: La aplicación en QA no respondió dentro del tiempo esperado."
+                      echo "Error: La aplicación en QA no respondió HTTP 200 dentro del tiempo esperado."
                       exit 1
                     fi
                     echo "Verificando endpoint /api/rutas en QA..."
@@ -213,10 +208,7 @@ stages:
                     package: '$(Pipeline.Workspace)/backend-package/*.zip'
                     runtimeStack: 'NODE|22-lts'
                     startUpCommand: 'npm start'
-                    appSettings: >
-                      -NODE_ENV production
-                      -CORS_ORIGIN $(CORS_ORIGIN_PROD)
-                      -MONGODB_URI $(MONGODB_URI_PROD)
+                    appSettings: '-PORT "8080" -WEBSITES_PORT "8080" -NODE_ENV "production" -CORS_ORIGIN "$(CORS_ORIGIN_PROD)" -MONGODB_URI "$(MONGODB_URI_PROD)"'
 
                 - script: |
                     echo "Esperando 30 segundos a que la aplicación inicie en PROD..."
