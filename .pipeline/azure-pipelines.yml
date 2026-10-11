@@ -227,7 +227,7 @@ stages:
                     appSettings: '-PORT "8080" -WEBSITES_PORT "8080" -NODE_ENV "production" -CORS_ORIGIN "$(CORS_ORIGIN_PROD)" -MONGODB_URI "$(MONGODB_URI_PROD)"'
 
                 - script: |
-                    URL="https://yourbus-back-prod.azurewebsites.net"
+                    URL="https://yourbus-back-prod-h7a6hwhhhfd0ere0.chilecentral-01.azurewebsites.net"
                     echo "Esperando 30 segundos iniciales a que la aplicación inicie en PROD..."
                     sleep 30
                     SUCCESS=0
