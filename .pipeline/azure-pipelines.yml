@@ -19,7 +19,7 @@ pr:
 
 variables:
   - name: nodeVersion
-    value: '20.x'
+    value: '22.x'
   - group: 'YourBus-Backend-Vars'
 
 stages:
@@ -102,6 +102,8 @@ stages:
 
   # ---------------------------------------------------------------------
   # 3) DEPLOY — promoción secuencial DEV -> QA -> PROD
+  #    Los tres ambientes usan el mismo puerto (8080), el estándar de
+  #    Azure App Service Linux para Node.
   # ---------------------------------------------------------------------
   - stage: Deploy_DEV
     displayName: '3. Deploy - DEV'
@@ -172,7 +174,7 @@ stages:
                     package: '$(Pipeline.Workspace)/backend-package/*.zip'
                     runtimeStack: 'NODE|22-lts'
                     startUpCommand: 'npm start'
-                    appSettings: '-PORT "3000" -WEBSITES_PORT "3000" -NODE_ENV "qa" -CORS_ORIGIN "$(CORS_ORIGIN_QA)" -MONGODB_URI "$(MONGODB_URI_QA)"'
+                    appSettings: '-PORT "8080" -WEBSITES_PORT "8080" -NODE_ENV "qa" -CORS_ORIGIN "$(CORS_ORIGIN_QA)" -MONGODB_URI "$(MONGODB_URI_QA)"'
 
                 # --- Quality Gate de QA: pruebas contra la API ya desplegada ---
                 - script: |
