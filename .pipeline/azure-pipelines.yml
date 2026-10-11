@@ -67,7 +67,23 @@ stages:
               node -e "require('./src/app.js'); console.log('OK: la app carga correctamente')"
             displayName: 'Verificar que la app carga sin errores'
 
-          - publish: '$(System.DefaultWorkingDirectory)'
+          # --- Paquete liviano: solo código de producción ---
+          # (las pruebas ya corrieron arriba, así que se pueden quitar las devDependencies)
+          - script: npm prune --omit=dev
+            displayName: 'Quitar devDependencies (jest, mongodb-memory-server, eslint...)'
+
+          - task: CopyFiles@2
+            displayName: 'Copiar solo lo necesario para desplegar'
+            inputs:
+              SourceFolder: '$(System.DefaultWorkingDirectory)'
+              Contents: |
+                src/**
+                node_modules/**
+                package.json
+                package-lock.json
+              TargetFolder: '$(Build.ArtifactStagingDirectory)/app'
+
+          - publish: '$(Build.ArtifactStagingDirectory)/app'
             artifact: 'backend-source'
             displayName: 'Publicar código fuente validado'
 
@@ -126,13 +142,27 @@ stages:
                     package: '$(Pipeline.Workspace)/backend-package/*.zip'
                     runtimeStack: 'NODE|22-lts'
                     startUpCommand: 'npm start'
-                    appSettings: '-PORT "8080" -WEBSITES_PORT "8080" -NODE_ENV "development" -CORS_ORIGIN "$(CORS_ORIGIN_DEV)" -MONGODB_URI "$(MONGODB_URI_DEV)"'
+                    appSettings: '-PORT "8080" -NODE_ENV "development" -CORS_ORIGIN "$(CORS_ORIGIN_DEV)" -MONGODB_URI "$(MONGODB_URI_DEV)"'
 
                 - script: |
-                    echo "Esperando 30 segundos a que la aplicación inicie en DEV..."
+                    URL="https://yourbus-back-dev-bqhfb6hghpg3h7a2.chilecentral-01.azurewebsites.net"
+                    echo "Esperando 30 segundos iniciales a que la aplicación inicie en DEV..."
                     sleep 30
-                    echo "Verificando health check en DEV..."
-                    curl -sSf https://yourbus-back-dev-bqhfb6hghpg3h7a2.chilecentral-01.azurewebsites.net/api/rutas || exit 1
+                    SUCCESS=0
+                    for i in $(seq 1 18); do
+                      HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$URL/api/rutas")
+                      if [ "$HTTP_STATUS" -eq 200 ]; then
+                        echo "DEV respondiendo HTTP 200 OK."
+                        SUCCESS=1
+                        break
+                      fi
+                      echo "Intento $i: Código HTTP recibido $HTTP_STATUS, reintentando en 10s..."
+                      sleep 10
+                    done
+                    if [ $SUCCESS -ne 1 ]; then
+                      echo "Error: DEV no respondió HTTP 200 dentro del tiempo esperado."
+                      exit 1
+                    fi
                   displayName: 'Verificación post-despliegue en DEV'
 
   - stage: Deploy_QA
@@ -158,7 +188,7 @@ stages:
                     package: '$(Pipeline.Workspace)/backend-package/*.zip'
                     runtimeStack: 'NODE|22-lts'
                     startUpCommand: 'npm start'
-                    appSettings: '-PORT "8080" -WEBSITES_PORT "8080" -NODE_ENV "qa" -CORS_ORIGIN "$(CORS_ORIGIN_QA)" -MONGODB_URI "$(MONGODB_URI_QA)"'
+                    appSettings: '-PORT "8080" -NODE_ENV "qa" -CORS_ORIGIN "$(CORS_ORIGIN_QA)" -MONGODB_URI "$(MONGODB_URI_QA)"'
 
                 # --- Quality Gate de QA: pruebas contra la API ya desplegada ---
                 - script: |
@@ -208,11 +238,25 @@ stages:
                     package: '$(Pipeline.Workspace)/backend-package/*.zip'
                     runtimeStack: 'NODE|22-lts'
                     startUpCommand: 'npm start'
-                    appSettings: '-PORT "8080" -WEBSITES_PORT "8080" -NODE_ENV "production" -CORS_ORIGIN "$(CORS_ORIGIN_PROD)" -MONGODB_URI "$(MONGODB_URI_PROD)"'
+                    appSettings: '-PORT "8080" -NODE_ENV "production" -CORS_ORIGIN "$(CORS_ORIGIN_PROD)" -MONGODB_URI "$(MONGODB_URI_PROD)"'
 
                 - script: |
-                    echo "Esperando 30 segundos a que la aplicación inicie en PROD..."
+                    URL="https://yourbus-back-prod.azurewebsites.net"
+                    echo "Esperando 30 segundos iniciales a que la aplicación inicie en PROD..."
                     sleep 30
-                    echo "Verificando health check en PROD..."
-                    curl -sSf https://yourbus-back-prod.azurewebsites.net/api/rutas || exit 1
+                    SUCCESS=0
+                    for i in $(seq 1 18); do
+                      HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$URL/api/rutas")
+                      if [ "$HTTP_STATUS" -eq 200 ]; then
+                        echo "PROD respondiendo HTTP 200 OK."
+                        SUCCESS=1
+                        break
+                      fi
+                      echo "Intento $i: Código HTTP recibido $HTTP_STATUS, reintentando en 10s..."
+                      sleep 10
+                    done
+                    if [ $SUCCESS -ne 1 ]; then
+                      echo "Error: PROD no respondió HTTP 200 dentro del tiempo esperado."
+                      exit 1
+                    fi
                   displayName: 'Verificación post-despliegue en PROD'
