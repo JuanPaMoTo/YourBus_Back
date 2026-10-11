@@ -67,18 +67,7 @@ stages:
               node -e "require('./src/app.js'); console.log('OK: la app carga correctamente')"
             displayName: 'Verificar que la app carga sin errores'
 
-          # --- Paquete liviano: solo código; Azure instala las dependencias al desplegar ---
-          - task: CopyFiles@2
-            displayName: 'Copiar solo lo necesario para desplegar'
-            inputs:
-              SourceFolder: '$(System.DefaultWorkingDirectory)'
-              Contents: |
-                src/**
-                package.json
-                package-lock.json
-              TargetFolder: '$(Build.ArtifactStagingDirectory)/app'
-
-          - publish: '$(Build.ArtifactStagingDirectory)/app'
+          - publish: '$(System.DefaultWorkingDirectory)'
             artifact: 'backend-source'
             displayName: 'Publicar código fuente validado'
 
@@ -137,7 +126,7 @@ stages:
                     package: '$(Pipeline.Workspace)/backend-package/*.zip'
                     runtimeStack: 'NODE|22-lts'
                     startUpCommand: 'npm start'
-                    appSettings: '-SCM_DO_BUILD_DURING_DEPLOYMENT "true" -NODE_ENV "development" -CORS_ORIGIN "$(CORS_ORIGIN_DEV)" -MONGODB_URI "$(MONGODB_URI_DEV)"'
+                    appSettings: '-PORT "8080" -WEBSITES_PORT "8080" -NODE_ENV "development" -CORS_ORIGIN "$(CORS_ORIGIN_DEV)" -MONGODB_URI "$(MONGODB_URI_DEV)"'
 
                 - script: |
                     URL="https://yourbus-back-dev-bqhfb6hghpg3h7a2.chilecentral-01.azurewebsites.net"
@@ -183,7 +172,7 @@ stages:
                     package: '$(Pipeline.Workspace)/backend-package/*.zip'
                     runtimeStack: 'NODE|22-lts'
                     startUpCommand: 'npm start'
-                    appSettings: '-SCM_DO_BUILD_DURING_DEPLOYMENT "true" -NODE_ENV "qa" -CORS_ORIGIN "$(CORS_ORIGIN_QA)" -MONGODB_URI "$(MONGODB_URI_QA)"'
+                    appSettings: '-PORT "8080" -WEBSITES_PORT "8080" -NODE_ENV "qa" -CORS_ORIGIN "$(CORS_ORIGIN_QA)" -MONGODB_URI "$(MONGODB_URI_QA)"'
 
                 # --- Quality Gate de QA: pruebas contra la API ya desplegada ---
                 - script: |
@@ -233,7 +222,7 @@ stages:
                     package: '$(Pipeline.Workspace)/backend-package/*.zip'
                     runtimeStack: 'NODE|22-lts'
                     startUpCommand: 'npm start'
-                    appSettings: '-SCM_DO_BUILD_DURING_DEPLOYMENT "true" -NODE_ENV "production" -CORS_ORIGIN "$(CORS_ORIGIN_PROD)" -MONGODB_URI "$(MONGODB_URI_PROD)"'
+                    appSettings: '-PORT "8080" -WEBSITES_PORT "8080" -NODE_ENV "production" -CORS_ORIGIN "$(CORS_ORIGIN_PROD)" -MONGODB_URI "$(MONGODB_URI_PROD)"'
 
                 - script: |
                     URL="https://yourbus-back-prod.azurewebsites.net"
