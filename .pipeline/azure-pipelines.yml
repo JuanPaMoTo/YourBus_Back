@@ -170,7 +170,7 @@ stages:
                   inputs:
                     azureSubscription: 'AzureServiceConnection'
                     appType: 'webAppLinux'
-                    appName: 'yourbus-back-qa'
+                    appName: 'yourbus-back-qa2'
                     package: '$(Pipeline.Workspace)/backend-package/*.zip'
                     runtimeStack: 'NODE|22-lts'
                     startUpCommand: 'npm start'
@@ -178,7 +178,7 @@ stages:
 
                 # --- Quality Gate de QA: pruebas contra la API ya desplegada ---
                 - script: |
-                    URL="https://yourbus-back-qa-brepb7hma8g9eqd2.chilecentral-01.azurewebsites.net"
+                    URL="https://yourbus-back-qa2-hqhuezhzaeceajd8.chilecentral-01.azurewebsites.net"
                     echo "Esperando 30 segundos iniciales a que Azure extraiga e inicie la app en QA..."
                     sleep 30
                     echo "Esperando a que la aplicación responda en QA (hasta 3 minutos adicionales)..."
