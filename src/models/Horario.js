@@ -6,7 +6,7 @@ const horarioSchema = new Schema(
     hora: { type: String, required: true, trim: true },
     rutaId: { type: Types.ObjectId, ref: 'Ruta', required: true },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 horarioSchema.index({ rutaId: 1 });

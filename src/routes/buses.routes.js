@@ -1,9 +1,5 @@
 const { Router } = require('express');
-const {
-  ubicacionBus,
-  etaParadero,
-  registrarBus,
-} = require('../controllers/buses.controller');
+const { ubicacionBus, etaParadero, registrarBus } = require('../controllers/buses.controller');
 
 const router = Router();
 

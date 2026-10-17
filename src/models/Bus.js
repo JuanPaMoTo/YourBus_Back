@@ -8,7 +8,7 @@ const busSchema = new Schema(
     lng: { type: Number, default: null },
     rutaId: { type: Types.ObjectId, ref: 'Ruta', default: null },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 module.exports = model('Bus', busSchema);

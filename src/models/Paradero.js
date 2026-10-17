@@ -6,7 +6,7 @@ const paraderoSchema = new Schema(
     orden: { type: Number, required: true },
     rutaId: { type: Types.ObjectId, ref: 'Ruta', required: true },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 paraderoSchema.index({ rutaId: 1, orden: 1 });

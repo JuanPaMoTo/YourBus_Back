@@ -10,7 +10,7 @@ const rutaSchema = new Schema(
       default: 'operativa',
     },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 module.exports = model('Ruta', rutaSchema);

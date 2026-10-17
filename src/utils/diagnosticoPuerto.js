@@ -139,9 +139,13 @@ const VARS_CON_VALOR = [
 ];
 
 function resumenEntorno() {
-  const conValor = VARS_CON_VALOR.map((k) => `${k}=${process.env[k] === undefined ? '(no definida)' : process.env[k]}`);
+  const conValor = VARS_CON_VALOR.map(
+    (k) => `${k}=${process.env[k] === undefined ? '(no definida)' : process.env[k]}`,
+  );
   const soloNombre = Object.keys(process.env)
-    .filter((k) => /^(WEBSITE|WEBSITES|APPSVC|ORYX|CONTAINER)/.test(k) && !VARS_CON_VALOR.includes(k))
+    .filter(
+      (k) => /^(WEBSITE|WEBSITES|APPSVC|ORYX|CONTAINER)/.test(k) && !VARS_CON_VALOR.includes(k),
+    )
     .sort();
   return { conValor, soloNombre };
 }
@@ -155,20 +159,28 @@ function diagnosticarPuerto(puerto, log = console.error) {
   log(`Mi proceso: pid=${process.pid} ppid=${process.ppid}`);
   const entorno = resumenEntorno();
   log(`Entorno: ${entorno.conValor.join(' | ')}`);
-  log(`Otras variables de plataforma (solo nombres): ${entorno.soloNombre.join(', ') || '(ninguna)'}`);
+  log(
+    `Otras variables de plataforma (solo nombres): ${entorno.soloNombre.join(', ') || '(ninguna)'}`,
+  );
 
   if (listeners.length === 0) {
-    log(`No hay ningún socket en LISTEN en el puerto ${puerto} dentro de este contenedor ahora mismo (quizá se liberó justo ahora).`);
+    log(
+      `No hay ningún socket en LISTEN en el puerto ${puerto} dentro de este contenedor ahora mismo (quizá se liberó justo ahora).`,
+    );
   }
   for (const l of listeners) {
     const pids = mapa.get(`socket:[${l.inodo}]`) || [];
     if (pids.length === 0) {
-      log(`Escucha ${l.familia} ${l.direccion}: dueño NO visible desde este proceso (inodo ${l.inodo}). Suele ser otro contenedor/sidecar que comparte la red.`);
+      log(
+        `Escucha ${l.familia} ${l.direccion}: dueño NO visible desde este proceso (inodo ${l.inodo}). Suele ser otro contenedor/sidecar que comparte la red.`,
+      );
     }
     for (const pid of pids) {
       const info = { pid, ppid: ppidDe(pid), cmd: cmdDe(pid) };
       propietarios.push(info);
-      log(`Escucha ${l.familia} ${l.direccion}: pid=${info.pid} ppid=${info.ppid} cmd="${info.cmd}"`);
+      log(
+        `Escucha ${l.familia} ${l.direccion}: pid=${info.pid} ppid=${info.ppid} cmd="${info.cmd}"`,
+      );
     }
   }
 
@@ -178,7 +190,9 @@ function diagnosticarPuerto(puerto, log = console.error) {
   }
 
   const nginx = resumenNginx();
-  log(`--- Config de nginx (listen/root/server_name) ---${nginx.length ? '' : ' (no se encontró /etc/nginx)'}`);
+  log(
+    `--- Config de nginx (listen/root/server_name) ---${nginx.length ? '' : ' (no se encontró /etc/nginx)'}`,
+  );
   nginx.forEach((l) => log(l));
 
   log(`--- Archivos en ${process.cwd()} --- ${listarCarpeta(process.cwd())}`);
