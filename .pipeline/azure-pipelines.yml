@@ -3,6 +3,16 @@
 # Flujo DevOps: 3 etapas secuenciales (Compile/Build -> Package -> Deploy).
 # La etapa Deploy promueve el mismo artefacto por DEV -> QA -> PROD.
 # QA corre pruebas de integración adicionales antes de habilitar el paso a PROD.
+#
+# Variables que deben existir en el variable group 'YourBus-Backend-Vars':
+#   MONGODB_URI_DEV/QA/PROD, CORS_ORIGIN_DEV/QA/PROD  (ya existentes)
+#   JWT_SECRET       (secreta, mínimo 16 caracteres al azar) firma las sesiones
+#   ADMIN_EMAIL      correo del administrador inicial
+#   ADMIN_PASSWORD   (secreta, mínimo 8 caracteres, sin comillas) su contraseña
+#
+# Inspección de código con SonarCloud: se activa cambiando runSonar a 'true'
+# cuando ya exista la organización, el proyecto y la service connection
+# 'SonarCloud' (pasos en el README, sección "SonarCloud").
 
 trigger:
   branches:
@@ -20,6 +30,12 @@ pr:
 variables:
   - name: nodeVersion
     value: '22.x'
+  - name: runSonar
+    value: 'false'
+  - name: sonarOrganization
+    value: 'TU-ORGANIZACION-SONAR'
+  - name: sonarProjectKey
+    value: 'TU-ORGANIZACION-SONAR_YourBus_Back'
   - group: 'YourBus-Backend-Vars'
 
 stages:
@@ -35,13 +51,36 @@ stages:
         pool:
           vmImage: 'ubuntu-latest'
         steps:
+          # Historial completo: SonarCloud lo necesita para atribuir líneas nuevas.
+          - checkout: self
+            fetchDepth: 0
+
           - task: NodeTool@0
             inputs:
               versionSpec: $(nodeVersion)
             displayName: 'Usar Node.js $(nodeVersion)'
 
+          - task: SonarCloudPrepare@4
+            condition: eq(variables['runSonar'], 'true')
+            displayName: 'SonarCloud: preparar análisis'
+            inputs:
+              SonarCloud: 'SonarCloud'
+              organization: '$(sonarOrganization)'
+              scannerMode: 'cli'
+              configMode: 'manual'
+              cliProjectKey: '$(sonarProjectKey)'
+              cliProjectName: 'YourBus_Back'
+              cliSources: 'src'
+              extraProperties: |
+                sonar.tests=tests
+                sonar.javascript.lcov.reportPaths=coverage/lcov.info
+                sonar.exclusions=**/node_modules/**,coverage/**,test-results/**
+
+          # HUSKY=0: los hooks de git son para el computador del desarrollador, no para CI.
           - script: npm ci
             displayName: 'npm ci'
+            env:
+              HUSKY: '0'
 
           # --- Quality Gate: análisis estático de código ---
           - script: npm run lint
@@ -62,6 +101,17 @@ stages:
             condition: succeededOrFailed()
             inputs:
               summaryFileLocation: '$(System.DefaultWorkingDirectory)/coverage/cobertura-coverage.xml'
+
+          # --- Quality Gate: inspección de código en SonarCloud ---
+          - task: SonarCloudAnalyze@4
+            condition: and(succeeded(), eq(variables['runSonar'], 'true'))
+            displayName: 'SonarCloud: analizar código'
+
+          - task: SonarCloudPublish@4
+            condition: and(succeeded(), eq(variables['runSonar'], 'true'))
+            displayName: 'SonarCloud: publicar resultado'
+            inputs:
+              pollingTimeoutSec: '300'
 
           - script: |
               node -e "require('./src/app.js'); console.log('OK: la app carga correctamente')"
@@ -86,6 +136,10 @@ stages:
         steps:
           - download: current
             artifact: 'backend-source'
+
+          # El historial de git y la carpeta de SonarCloud no deben viajar a producción.
+          - script: rm -rf "$(Pipeline.Workspace)/backend-source/.git" "$(Pipeline.Workspace)/backend-source/.scannerwork"
+            displayName: 'Quitar .git y .scannerwork del paquete'
 
           - task: ArchiveFiles@2
             displayName: 'Comprimir código + package.json en zip versionado'
@@ -128,7 +182,7 @@ stages:
                     package: '$(Pipeline.Workspace)/backend-package/*.zip'
                     runtimeStack: 'NODE|22-lts'
                     startUpCommand: 'npm start'
-                    appSettings: '-PORT "8080" -WEBSITES_PORT "8080" -NODE_ENV "development" -CORS_ORIGIN "$(CORS_ORIGIN_DEV)" -MONGODB_URI "$(MONGODB_URI_DEV)"'
+                    appSettings: '-PORT "8080" -WEBSITES_PORT "8080" -AUTO_SEED "true" -JWT_SECRET "$(JWT_SECRET)" -ADMIN_EMAIL "$(ADMIN_EMAIL)" -ADMIN_PASSWORD "$(ADMIN_PASSWORD)" -TZ_OPERACION "America/Santiago" -NODE_ENV "development" -CORS_ORIGIN "$(CORS_ORIGIN_DEV)" -MONGODB_URI "$(MONGODB_URI_DEV)"'
 
                 - script: |
                     URL="https://yourbus-back-dev-bqhfb6hghpg3h7a2.chilecentral-01.azurewebsites.net"
@@ -174,7 +228,7 @@ stages:
                     package: '$(Pipeline.Workspace)/backend-package/*.zip'
                     runtimeStack: 'NODE|22-lts'
                     startUpCommand: 'npm start'
-                    appSettings: '-PORT "8080" -WEBSITES_PORT "8080" -NODE_ENV "qa" -CORS_ORIGIN "$(CORS_ORIGIN_QA)" -MONGODB_URI "$(MONGODB_URI_QA)"'
+                    appSettings: '-PORT "8080" -WEBSITES_PORT "8080" -AUTO_SEED "true" -JWT_SECRET "$(JWT_SECRET)" -ADMIN_EMAIL "$(ADMIN_EMAIL)" -ADMIN_PASSWORD "$(ADMIN_PASSWORD)" -TZ_OPERACION "America/Santiago" -NODE_ENV "qa" -CORS_ORIGIN "$(CORS_ORIGIN_QA)" -MONGODB_URI "$(MONGODB_URI_QA)"'
 
                 # --- Quality Gate de QA: pruebas contra la API ya desplegada ---
                 - script: |
@@ -224,7 +278,7 @@ stages:
                     package: '$(Pipeline.Workspace)/backend-package/*.zip'
                     runtimeStack: 'NODE|22-lts'
                     startUpCommand: 'npm start'
-                    appSettings: '-PORT "8080" -WEBSITES_PORT "8080" -NODE_ENV "production" -CORS_ORIGIN "$(CORS_ORIGIN_PROD)" -MONGODB_URI "$(MONGODB_URI_PROD)"'
+                    appSettings: '-PORT "8080" -WEBSITES_PORT "8080" -AUTO_SEED "true" -JWT_SECRET "$(JWT_SECRET)" -ADMIN_EMAIL "$(ADMIN_EMAIL)" -ADMIN_PASSWORD "$(ADMIN_PASSWORD)" -TZ_OPERACION "America/Santiago" -NODE_ENV "production" -CORS_ORIGIN "$(CORS_ORIGIN_PROD)" -MONGODB_URI "$(MONGODB_URI_PROD)"'
 
                 - script: |
                     URL="https://yourbus-back-prod-h7a6hwhhhfd0ere0.chilecentral-01.azurewebsites.net"

@@ -1,5 +1,5 @@
 const mongoose = require('mongoose');
-const { Bus, Paradero } = require('../models');
+const { Bus } = require('../models');
 
 async function ubicacionBus(req, res, next) {
   try {
@@ -17,21 +17,11 @@ async function ubicacionBus(req, res, next) {
   }
 }
 
-async function etaParadero(req, res, next) {
+// Solo administradores (la ruta exige el rol).
+async function listarBuses(req, res, next) {
   try {
-    const { paraderoId } = req.params;
-    if (!mongoose.isValidObjectId(paraderoId)) {
-      return res.status(404).json({ error: 'No hay ETA disponible para este paradero' });
-    }
-    const paradero = await Paradero.findById(paraderoId);
-    if (!paradero) {
-      return res.status(404).json({ error: 'No hay ETA disponible para este paradero' });
-    }
-    // Placeholder determinístico mientras no hay telemetría GPS real: en
-    // producción esto se calcularía a partir de la posición en vivo del
-    // bus asignado a la ruta (distancia / velocidad promedio).
-    const minutos = paradero.orden * 3 + 2;
-    res.json({ minutos });
+    const buses = await Bus.find().sort({ placa: 1 });
+    res.json(buses);
   } catch (err) {
     next(err);
   }
@@ -54,4 +44,4 @@ async function registrarBus(req, res, next) {
   }
 }
 
-module.exports = { ubicacionBus, etaParadero, registrarBus };
+module.exports = { ubicacionBus, listarBuses, registrarBus };
