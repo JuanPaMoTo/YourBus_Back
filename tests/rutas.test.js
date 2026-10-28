@@ -1,17 +1,16 @@
 const request = require('supertest');
-const mongoose = require('mongoose');
-const { MongoMemoryServer } = require('mongodb-memory-server');
 const app = require('../src/app');
 const { Ruta, Paradero, Bus } = require('../src/models');
+const { iniciarBase, cerrarBase } = require('./helpers/db');
+const { crearCuenta } = require('./helpers/cuentas');
 
-let mongoServer;
 let rutaL1;
 let busBus101;
+let admin;
 
 beforeAll(async () => {
   // Mongo real en memoria: los tests no dependen de Atlas ni de internet.
-  mongoServer = await MongoMemoryServer.create();
-  await mongoose.connect(mongoServer.getUri());
+  await iniciarBase();
 
   rutaL1 = await Ruta.create({ codigo: 'L1', nombre: 'Terminal Norte - Centro' });
   await Paradero.create({ nombre: 'Terminal Norte', orden: 1, rutaId: rutaL1._id });
@@ -21,12 +20,10 @@ beforeAll(async () => {
     lat: -33.437,
     lng: -70.6505,
   });
+  admin = await crearCuenta('admin');
 });
 
-afterAll(async () => {
-  await mongoose.disconnect();
-  await mongoServer.stop();
-});
+afterAll(cerrarBase);
 
 describe('GET /health', () => {
   it('responde ok', async () => {
@@ -42,6 +39,12 @@ describe('GET /api/rutas', () => {
     expect(res.status).toBe(200);
     expect(Array.isArray(res.body)).toBe(true);
     expect(res.body.length).toBeGreaterThan(0);
+  });
+
+  it('incluye "id" en cada ruta (lo usa el front como key)', async () => {
+    const res = await request(app).get('/api/rutas');
+    expect(res.body[0].id).toBe(String(rutaL1._id));
+    expect(res.body[0]).not.toHaveProperty('__v');
   });
 });
 
@@ -67,15 +70,30 @@ describe('GET /api/buses/:busId/ubicacion', () => {
   });
 });
 
-describe('POST /api/buses', () => {
+describe('POST /api/buses (solo administrador)', () => {
+  it('rechaza la petición sin sesión', async () => {
+    const res = await request(app).post('/api/buses').send({ placa: 'AAAA-11', empresa: 'X' });
+    expect(res.status).toBe(401);
+  });
+
+  it('rechaza a un pasajero', async () => {
+    const pasajero = await crearCuenta('pasajero');
+    const res = await request(app)
+      .post('/api/buses')
+      .set(pasajero.auth)
+      .send({ placa: 'AAAA-11', empresa: 'X' });
+    expect(res.status).toBe(403);
+  });
+
   it('rechaza el registro sin placa ni empresa', async () => {
-    const res = await request(app).post('/api/buses').send({});
+    const res = await request(app).post('/api/buses').set(admin.auth).send({});
     expect(res.status).toBe(400);
   });
 
   it('registra un bus nuevo correctamente', async () => {
     const res = await request(app)
       .post('/api/buses')
+      .set(admin.auth)
       .send({ placa: 'ZZZZ-99', empresa: 'Transportes Test' });
     expect(res.status).toBe(201);
     expect(res.body.placa).toBe('ZZZZ-99');
@@ -84,7 +102,14 @@ describe('POST /api/buses', () => {
   it('rechaza una placa duplicada', async () => {
     const res = await request(app)
       .post('/api/buses')
+      .set(admin.auth)
       .send({ placa: 'ZZZZ-99', empresa: 'Otra empresa' });
     expect(res.status).toBe(409);
+  });
+
+  it('el administrador puede listar la flota', async () => {
+    const res = await request(app).get('/api/buses').set(admin.auth);
+    expect(res.status).toBe(200);
+    expect(res.body.map((b) => b.placa)).toContain('ZZZZ-99');
   });
 });

@@ -15,7 +15,7 @@ const corsOptions = {
     error.status = 403;
     return callback(error);
   },
-  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
   credentials: false,
 };
 
