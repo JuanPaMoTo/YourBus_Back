@@ -60,21 +60,22 @@ stages:
               versionSpec: $(nodeVersion)
             displayName: 'Usar Node.js $(nodeVersion)'
 
-          - task: SonarCloudPrepare@4
-            condition: eq(variables['runSonar'], 'true')
-            displayName: 'SonarCloud: preparar análisis'
-            inputs:
-              SonarCloud: 'SonarCloud'
-              organization: '$(sonarOrganization)'
-              scannerMode: 'cli'
-              configMode: 'manual'
-              cliProjectKey: '$(sonarProjectKey)'
-              cliProjectName: 'YourBus_Back'
-              cliSources: 'src'
-              extraProperties: |
-                sonar.tests=tests
-                sonar.javascript.lcov.reportPaths=coverage/lcov.info
-                sonar.exclusions=**/node_modules/**,coverage/**,test-results/**
+          # (desactivado hasta instalar la extensión SonarQube Cloud; ver README, sección SonarCloud)
+          # - task: SonarCloudPrepare@4
+          #   condition: eq(variables['runSonar'], 'true')
+          #   displayName: 'SonarCloud: preparar análisis'
+          #   inputs:
+          #     SonarCloud: 'SonarCloud'
+          #     organization: '$(sonarOrganization)'
+          #     scannerMode: 'cli'
+          #     configMode: 'manual'
+          #     cliProjectKey: '$(sonarProjectKey)'
+          #     cliProjectName: 'YourBus_Back'
+          #     cliSources: 'src'
+          #     extraProperties: |
+          #       sonar.tests=tests
+          #       sonar.javascript.lcov.reportPaths=coverage/lcov.info
+          #       sonar.exclusions=**/node_modules/**,coverage/**,test-results/**
 
           # HUSKY=0: los hooks de git son para el computador del desarrollador, no para CI.
           - script: npm ci
@@ -103,15 +104,17 @@ stages:
               summaryFileLocation: '$(System.DefaultWorkingDirectory)/coverage/cobertura-coverage.xml'
 
           # --- Quality Gate: inspección de código en SonarCloud ---
-          - task: SonarCloudAnalyze@4
-            condition: and(succeeded(), eq(variables['runSonar'], 'true'))
-            displayName: 'SonarCloud: analizar código'
+          # (desactivado hasta instalar la extensión SonarQube Cloud; ver README, sección SonarCloud)
+          # - task: SonarCloudAnalyze@4
+          #   condition: and(succeeded(), eq(variables['runSonar'], 'true'))
+          #   displayName: 'SonarCloud: analizar código'
 
-          - task: SonarCloudPublish@4
-            condition: and(succeeded(), eq(variables['runSonar'], 'true'))
-            displayName: 'SonarCloud: publicar resultado'
-            inputs:
-              pollingTimeoutSec: '300'
+          # (desactivado hasta instalar la extensión SonarQube Cloud; ver README, sección SonarCloud)
+          # - task: SonarCloudPublish@4
+          #   condition: and(succeeded(), eq(variables['runSonar'], 'true'))
+          #   displayName: 'SonarCloud: publicar resultado'
+          #   inputs:
+          #     pollingTimeoutSec: '300'
 
           - script: |
               node -e "require('./src/app.js'); console.log('OK: la app carga correctamente')"
