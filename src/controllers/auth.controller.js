@@ -33,11 +33,17 @@ function validarDatosUsuario({ nombre, email, password }) {
 // así la misma política de contraseñas vale en los tres.
 async function crearUsuario({ nombre, email, password, rol }) {
   validarDatosUsuario({ nombre, email, password });
+  const correo = email.trim().toLowerCase();
+  // Verificación explícita: no depende de que el índice único ya esté creado.
+  // El índice sigue siendo la barrera final ante dos registros simultáneos.
+  if (await Usuario.exists({ email: correo })) {
+    throw crearError(409, 'Ya existe una cuenta con ese correo');
+  }
   const passwordHash = await bcrypt.hash(password, RONDAS);
   try {
     return await Usuario.create({
       nombre: nombre.trim(),
-      email: email.trim().toLowerCase(),
+      email: correo,
       passwordHash,
       rol,
     });

@@ -11,10 +11,12 @@ async function iniciarBase() {
   const dbName = `test_${crypto.randomBytes(6).toString('hex')}`;
   if (process.env.TEST_MONGODB_URI) {
     await mongoose.connect(process.env.TEST_MONGODB_URI, { dbName });
-    return;
+  } else {
+    mongoServer = await MongoMemoryServer.create();
+    await mongoose.connect(mongoServer.getUri(), { dbName });
   }
-  mongoServer = await MongoMemoryServer.create();
-  await mongoose.connect(mongoServer.getUri(), { dbName });
+  // Los índices únicos se crean en segundo plano: esperarlos evita pruebas intermitentes.
+  await Promise.all(Object.values(mongoose.models).map((modelo) => modelo.init()));
 }
 
 async function cerrarBase() {
