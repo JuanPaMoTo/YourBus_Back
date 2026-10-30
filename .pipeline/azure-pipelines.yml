@@ -10,9 +10,9 @@
 #   ADMIN_EMAIL      correo del administrador inicial
 #   ADMIN_PASSWORD   (secreta, mínimo 8 caracteres, sin comillas) su contraseña
 #
-# Inspección de código con SonarCloud: ACTIVADA (runSonar = 'true').
-# Requiere la extensión SonarQube Cloud instalada en Azure DevOps y la
-# service connection 'SonarCloud'. Organización: juanpamoto.
+# Inspección de código con SonarCloud: se activa cambiando runSonar a 'true'
+# cuando ya exista la organización, el proyecto y la service connection
+# 'SonarCloud' (pasos en el README, sección "SonarCloud").
 
 trigger:
   branches:
@@ -204,6 +204,35 @@ stages:
                       exit 1
                     fi
                   displayName: 'Verificación post-despliegue en DEV'
+
+  # ---------------------------------------------------------------------
+  # SEGURIDAD Y CALIDAD WEB — corre en DEV, en paralelo con QA y sin bloquearlo:
+  # los informes quedan como artefactos descargables de la ejecución.
+  # ---------------------------------------------------------------------
+  - stage: Security_DEV
+    displayName: '4. Seguridad (ZAP) - DEV'
+    dependsOn: Deploy_DEV
+    condition: succeeded()
+    jobs:
+      - job: ZAP_API
+        displayName: 'OWASP ZAP sobre la API de DEV'
+        pool:
+          vmImage: 'ubuntu-latest'
+        steps:
+          # Escaneo "baseline" de OWASP ZAP: pasivo (no ataca ni modifica datos),
+          # revisa cabeceras, cookies y configuración según el OWASP Top 10.
+          - script: |
+              OUT="$(Build.ArtifactStagingDirectory)/zap"
+              mkdir -p "$OUT" && chmod 777 "$OUT"
+              docker run --rm -v "$OUT":/zap/wrk:rw -t ghcr.io/zaproxy/zaproxy:stable \
+                zap-baseline.py -t "https://yourbus-back-dev-bqhfb6hghpg3h7a2.chilecentral-01.azurewebsites.net/api/rutas" -r reporte-zap.html -J reporte-zap.json -I
+            displayName: 'OWASP ZAP: escaneo baseline'
+            continueOnError: true
+
+          - publish: '$(Build.ArtifactStagingDirectory)/zap'
+            artifact: 'reporte-zap-back'
+            displayName: 'Publicar informe de ZAP'
+            condition: succeededOrFailed()
 
   - stage: Deploy_QA
     displayName: '3. Deploy - QA'
