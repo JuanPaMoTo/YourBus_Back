@@ -79,8 +79,9 @@ const login = asyncHandler(async (req, res) => {
   const usuario = await Usuario.findOne({ email: email.trim().toLowerCase() }).select(
     '+passwordHash'
   );
-  const coincide =
-    (await bcrypt.compare(password, usuario ? usuario.passwordHash : HASH_RELLENO)) === true;
+  const coincide = Boolean(
+    await bcrypt.compare(password, usuario ? usuario.passwordHash : HASH_RELLENO)
+  );
   if (!usuario || !coincide) throw crearError(401, 'Correo o contraseña incorrectos');
   if (!usuario.activo) throw crearError(403, 'Tu cuenta está desactivada');
 

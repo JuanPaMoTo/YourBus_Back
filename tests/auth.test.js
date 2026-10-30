@@ -46,6 +46,13 @@ describe('POST /api/auth/registro', () => {
   it.each([
     ['nombre muy corto', { nombre: 'A' }],
     ['correo inválido', { email: 'no-es-correo' }],
+    ['correo con dos arrobas', { email: 'a@@correo.cl' }],
+    ['correo sin parte local', { email: '@correo.cl' }],
+    ['correo sin dominio', { email: 'ana@' }],
+    ['correo con el punto al inicio del dominio', { email: 'ana@.cl' }],
+    ['correo con el punto al final del dominio', { email: 'ana@correo.' }],
+    ['correo con espacios', { email: 'a na@correo.cl' }],
+    ['correo de más de 254 caracteres', { email: `${'a'.repeat(250)}@correo.cl` }],
     ['contraseña corta', { password: '1234567' }],
     ['contraseña de más de 72 bytes', { password: 'x'.repeat(73) }],
   ])('rechaza %s', async (_, cambio) => {
@@ -53,6 +60,28 @@ describe('POST /api/auth/registro', () => {
       .post('/api/auth/registro')
       .send({ ...datosRegistro, email: 'nuevo@correo.cl', ...cambio });
     expect(res.status).toBe(400);
+  });
+});
+
+describe('registro: carrera entre dos cuentas con el mismo correo', () => {
+  afterEach(() => jest.restoreAllMocks());
+
+  it('responde 409 si el índice único detecta el duplicado al guardar', async () => {
+    // Simula que otra petición creó la cuenta justo entre la verificación y el guardado.
+    jest.spyOn(Usuario, 'create').mockRejectedValueOnce(Object.assign(new Error('dup'), { code: 11000 }));
+    const res = await request(app)
+      .post('/api/auth/registro')
+      .send({ ...datosRegistro, email: 'carrera@correo.cl' });
+    expect(res.status).toBe(409);
+  });
+
+  it('propaga cualquier otro error de la base como error interno', async () => {
+    jest.spyOn(Usuario, 'create').mockRejectedValueOnce(new Error('falló la base'));
+    jest.spyOn(console, 'error').mockImplementation(() => {});
+    const res = await request(app)
+      .post('/api/auth/registro')
+      .send({ ...datosRegistro, email: 'fallo@correo.cl' });
+    expect(res.status).toBe(500);
   });
 });
 

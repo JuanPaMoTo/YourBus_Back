@@ -75,6 +75,7 @@ stages:
                 sonar.tests=tests
                 sonar.javascript.lcov.reportPaths=coverage/lcov.info
                 sonar.exclusions=**/node_modules/**,coverage/**,test-results/**
+                sonar.coverage.exclusions=src/server.js,src/seed.js,src/config/database.js
 
           # HUSKY=0: los hooks de git son para el computador del desarrollador, no para CI.
           - script: npm ci
