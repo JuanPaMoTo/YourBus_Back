@@ -141,6 +141,16 @@ stages:
           - script: rm -rf "$(Pipeline.Workspace)/backend-source/.git" "$(Pipeline.Workspace)/backend-source/.scannerwork"
             displayName: 'Quitar .git y .scannerwork del paquete'
 
+          # El paquete solo necesita las librerías de producción. Sin esto el zip
+          # lleva las de desarrollo, la caché de pruebas (incluye un MongoDB de
+          # ~100 MB) y los informes de cobertura, y el despliegue tarda muchísimo.
+          - script: |
+              cd "$(Pipeline.Workspace)/backend-source"
+              npm prune --omit=dev --ignore-scripts
+              rm -rf node_modules/.cache coverage test-results tests .husky
+              du -sh . || true
+            displayName: 'Dejar solo dependencias de producción'
+
           - task: ArchiveFiles@2
             displayName: 'Comprimir código + package.json en zip versionado'
             inputs:
