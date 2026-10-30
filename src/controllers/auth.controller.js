@@ -3,7 +3,17 @@ const { Usuario } = require('../models');
 const { firmarToken } = require('../utils/jwt');
 const { crearError, asyncHandler } = require('../utils/errores');
 
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+// Validación de correo sin expresiones regulares complejas (evita retroceso costoso):
+// una sola "@", sin espacios, y un punto dentro del dominio.
+function emailValido(valor) {
+  if (valor.length > 254 || /\s/.test(valor)) return false;
+  const partes = valor.split('@');
+  if (partes.length !== 2) return false;
+  const [local, dominio] = partes;
+  if (!local || !dominio) return false;
+  const punto = dominio.lastIndexOf('.');
+  return punto > 0 && punto < dominio.length - 1;
+}
 // bcrypt solo considera los primeros 72 bytes de la contraseña.
 const MAX_BYTES_PASSWORD = 72;
 const RONDAS = process.env.NODE_ENV === 'test' ? 4 : 10;
@@ -16,7 +26,7 @@ function validarDatosUsuario({ nombre, email, password }) {
   if (typeof nombre !== 'string' || nombre.trim().length < 2) {
     throw crearError(400, 'El nombre debe tener al menos 2 caracteres');
   }
-  if (typeof email !== 'string' || !EMAIL_RE.test(email.trim())) {
+  if (typeof email !== 'string' || !emailValido(email.trim())) {
     throw crearError(400, 'El correo no es válido');
   }
   if (
@@ -69,7 +79,8 @@ const login = asyncHandler(async (req, res) => {
   const usuario = await Usuario.findOne({ email: email.trim().toLowerCase() }).select(
     '+passwordHash'
   );
-  const coincide = await bcrypt.compare(password, usuario ? usuario.passwordHash : HASH_RELLENO);
+  const coincide =
+    (await bcrypt.compare(password, usuario ? usuario.passwordHash : HASH_RELLENO)) === true;
   if (!usuario || !coincide) throw crearError(401, 'Correo o contraseña incorrectos');
   if (!usuario.activo) throw crearError(403, 'Tu cuenta está desactivada');
 

@@ -17,11 +17,11 @@ function validarFiltroFechas({ desde, hasta }) {
   const rango = {};
   if (desde !== undefined) {
     if (!fechaValida(desde)) throw crearError(400, '"desde" debe tener formato AAAA-MM-DD');
-    rango.$gte = desde;
+    rango.$gte = String(desde);
   }
   if (hasta !== undefined) {
     if (!fechaValida(hasta)) throw crearError(400, '"hasta" debe tener formato AAAA-MM-DD');
-    rango.$lte = hasta;
+    rango.$lte = String(hasta);
   }
   return Object.keys(rango).length ? { fecha: rango } : {};
 }
@@ -32,12 +32,12 @@ const listar = asyncHandler(async (req, res) => {
   for (const campo of ['conductorId', 'rutaId', 'busId']) {
     if (req.query[campo]) {
       if (!mongoose.isValidObjectId(req.query[campo])) throw crearError(400, `${campo} no es válido`);
-      filtro[campo] = req.query[campo];
+      filtro[campo] = String(req.query[campo]);
     }
   }
   if (req.query.estado) {
     if (!Turno.ESTADOS.includes(req.query.estado)) throw crearError(400, 'Estado no válido');
-    filtro.estado = req.query.estado;
+    filtro.estado = String(req.query.estado);
   }
   const turnos = await buscarTurnos(filtro);
   res.json(turnos.map((t) => serializarTurno(t)));

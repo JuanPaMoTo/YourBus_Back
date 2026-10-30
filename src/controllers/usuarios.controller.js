@@ -7,7 +7,7 @@ const listar = asyncHandler(async (req, res) => {
   const filtro = {};
   if (req.query.rol) {
     if (!Usuario.ROLES.includes(req.query.rol)) throw crearError(400, 'Rol no válido');
-    filtro.rol = req.query.rol;
+    filtro.rol = String(req.query.rol);
   }
   const usuarios = await Usuario.find(filtro).sort({ nombre: 1 });
   res.json(usuarios);

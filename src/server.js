@@ -37,4 +37,7 @@ async function start() {
   process.on('SIGINT', shutdown);
 }
 
-start();
+start().catch((err) => {
+  console.error('Error inesperado al iniciar:', err);
+  process.exit(1);
+});

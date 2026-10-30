@@ -26,6 +26,13 @@ function resolverJwtSecret() {
   return crypto.randomBytes(32).toString('hex');
 }
 
+// Quita las "/" del final sin usar una expresión regular (evita retroceso costoso).
+function sinBarrasFinales(texto) {
+  let fin = texto.length;
+  while (fin > 0 && texto[fin - 1] === '/') fin -= 1;
+  return texto.slice(0, fin);
+}
+
 const config = {
   env,
   port: process.env.PORT || 4000,
@@ -56,7 +63,7 @@ const config = {
   routing: {
     // Servidor OSRM. El demo público es solo para pruebas y demostraciones;
     // para uso real conviene apuntar a un OSRM propio u otro proveedor.
-    osrmUrl: (process.env.OSRM_URL || 'https://router.project-osrm.org').replace(/\/+$/, ''),
+    osrmUrl: sinBarrasFinales(process.env.OSRM_URL || 'https://router.project-osrm.org'),
     timeoutMs: Number(process.env.ROUTING_TIMEOUT_MS) || 5000,
     // OSRM calcula tiempos para autos; un bus urbano es más lento.
     factorTiempoBus: Number(process.env.ETA_FACTOR_BUS) || 1.3,

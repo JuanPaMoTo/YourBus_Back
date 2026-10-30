@@ -13,7 +13,9 @@ async function listarRutas(req, res, next) {
 async function estadoRuta(req, res, next) {
   try {
     const { rutaId } = req.params;
-    const where = mongoose.isValidObjectId(rutaId) ? { _id: rutaId } : { codigo: rutaId };
+    // String(): el valor se trata siempre como texto, nunca como un operador de Mongo.
+    const valor = String(rutaId);
+    const where = mongoose.isValidObjectId(valor) ? { _id: valor } : { codigo: valor };
     const ruta = await Ruta.findOne(where);
     if (!ruta) {
       return res.status(404).json({ error: 'Ruta no encontrada' });
