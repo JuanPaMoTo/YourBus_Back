@@ -1,8 +1,10 @@
 # .pipeline/azure-pipelines.yml — YourBus_Back
 #
-# Flujo DevOps: 3 etapas secuenciales (Compile/Build -> Package -> Deploy).
-# La etapa Deploy promueve el mismo artefacto por DEV -> QA -> PROD.
-# QA corre pruebas de integración adicionales antes de habilitar el paso a PROD.
+# Flujo DevOps (cada caja del pipeline tiene un solo propósito):
+#   1. Compile / Build -> 2. Quality Gates (lint, pruebas, SonarCloud) -> 3. Package
+#   -> 4. Deploy DEV -> 5. Deploy QA -> 6. Seguridad (ZAP)
+#   (en paralelo, sobre QA) -> 7. Deploy PROD (con aprobación manual).
+# Se promueve el mismo artefacto por DEV -> QA -> PROD; PROD espera a los análisis.
 #
 # Variables que deben existir en el variable group 'YourBus-Backend-Vars':
 #   MONGODB_URI_DEV/QA/PROD, CORS_ORIGIN_DEV/QA/PROD  (ya existentes)
@@ -41,13 +43,48 @@ variables:
 stages:
 
   # ---------------------------------------------------------------------
-  # 1) COMPILE / BUILD — instala dependencias y corre Quality Gates
+  # 1) COMPILE / BUILD — instala dependencias y verifica que la app arranca
   # ---------------------------------------------------------------------
   - stage: Build
     displayName: '1. Compile / Build'
     jobs:
-      - job: BuildAndValidate
-        displayName: 'Instalar, analizar y probar'
+      - job: Compile
+        displayName: 'Instalar y verificar'
+        pool:
+          vmImage: 'ubuntu-latest'
+        steps:
+          - checkout: self
+
+          - task: NodeTool@0
+            inputs:
+              versionSpec: $(nodeVersion)
+            displayName: 'Usar Node.js $(nodeVersion)'
+
+          # HUSKY=0: los hooks de git son para el computador del desarrollador, no para CI.
+          - script: npm ci
+            displayName: 'npm ci'
+            env:
+              HUSKY: '0'
+
+          - script: |
+              node -e "require('./src/app.js'); console.log('OK: la app carga correctamente')"
+            displayName: 'Verificar que la app carga sin errores'
+
+          - publish: '$(System.DefaultWorkingDirectory)'
+            artifact: 'backend-source'
+            displayName: 'Publicar código fuente validado'
+
+  # ---------------------------------------------------------------------
+  # 2) QUALITY GATES — lint, pruebas con cobertura y SonarCloud.
+  #    Si algo falla aquí, no se empaqueta ni se despliega nada.
+  # ---------------------------------------------------------------------
+  - stage: QualityGates
+    displayName: '2. Quality Gates'
+    dependsOn: Build
+    condition: succeeded()
+    jobs:
+      - job: LintPruebasSonar
+        displayName: 'Lint, pruebas y SonarCloud'
         pool:
           vmImage: 'ubuntu-latest'
         steps:
@@ -114,20 +151,12 @@ stages:
             inputs:
               pollingTimeoutSec: '300'
 
-          - script: |
-              node -e "require('./src/app.js'); console.log('OK: la app carga correctamente')"
-            displayName: 'Verificar que la app carga sin errores'
-
-          - publish: '$(System.DefaultWorkingDirectory)'
-            artifact: 'backend-source'
-            displayName: 'Publicar código fuente validado'
-
   # ---------------------------------------------------------------------
-  # 2) PACKAGE — empaqueta la app lista para desplegar
+  # 3) PACKAGE — empaqueta la app listo para desplegar
   # ---------------------------------------------------------------------
   - stage: Package
-    displayName: '2. Package'
-    dependsOn: Build
+    displayName: '3. Package'
+    dependsOn: QualityGates
     condition: succeeded()
     jobs:
       - job: PackageArtifact
@@ -166,12 +195,12 @@ stages:
             displayName: 'Publicar paquete final'
 
   # ---------------------------------------------------------------------
-  # 3) DEPLOY — promoción secuencial DEV -> QA -> PROD
+  # DEPLOY — el mismo artefacto se promueve DEV (4) -> QA (5) -> PROD (7)
   #    Los tres ambientes usan el mismo puerto (8080), el estándar de
   #    Azure App Service Linux para Node.
   # ---------------------------------------------------------------------
   - stage: Deploy_DEV
-    displayName: '3. Deploy - DEV'
+    displayName: '4. Deploy - DEV'
     dependsOn: Package
     condition: succeeded()
     jobs:
@@ -216,37 +245,8 @@ stages:
                     fi
                   displayName: 'Verificación post-despliegue en DEV'
 
-  # ---------------------------------------------------------------------
-  # SEGURIDAD Y CALIDAD WEB — corre en DEV, en paralelo con QA y sin bloquearlo:
-  # los informes quedan como artefactos descargables de la ejecución.
-  # ---------------------------------------------------------------------
-  - stage: Security_DEV
-    displayName: '4. Seguridad (ZAP) - DEV'
-    dependsOn: Deploy_DEV
-    condition: succeeded()
-    jobs:
-      - job: ZAP_API
-        displayName: 'OWASP ZAP sobre la API de DEV'
-        pool:
-          vmImage: 'ubuntu-latest'
-        steps:
-          # Escaneo "baseline" de OWASP ZAP: pasivo (no ataca ni modifica datos),
-          # revisa cabeceras, cookies y configuración según el OWASP Top 10.
-          - script: |
-              OUT="$(Build.ArtifactStagingDirectory)/zap"
-              mkdir -p "$OUT" && chmod 777 "$OUT"
-              docker run --rm -v "$OUT":/zap/wrk:rw -t ghcr.io/zaproxy/zaproxy:stable \
-                zap-baseline.py -t "https://yourbus-back-dev-bqhfb6hghpg3h7a2.chilecentral-01.azurewebsites.net/api/rutas" -r reporte-zap.html -J reporte-zap.json -I
-            displayName: 'OWASP ZAP: escaneo baseline'
-            continueOnError: true
-
-          - publish: '$(Build.ArtifactStagingDirectory)/zap'
-            artifact: 'reporte-zap-back'
-            displayName: 'Publicar informe de ZAP'
-            condition: succeededOrFailed()
-
   - stage: Deploy_QA
-    displayName: '3. Deploy - QA'
+    displayName: '5. Deploy - QA'
     dependsOn: Deploy_DEV
     condition: succeeded()
     jobs:
@@ -295,9 +295,41 @@ stages:
                     curl -sSf "$URL/api/rutas" || exit 1
                   displayName: 'Quality Gate QA: pruebas de humo sobre la API desplegada'
 
-  - stage: Deploy_PROD
-    displayName: '3. Deploy - PROD'
+  # ---------------------------------------------------------------------
+  # 6) SEGURIDAD — solo análisis de seguridad (OWASP ZAP, pasivo) sobre QA.
+  #    Los informes quedan como artefactos descargables de la ejecución.
+  # ---------------------------------------------------------------------
+  - stage: Security_QA
+    displayName: '6. Seguridad (ZAP) - QA'
     dependsOn: Deploy_QA
+    condition: succeeded()
+    jobs:
+      - job: ZAP_API
+        displayName: 'OWASP ZAP sobre la API de QA'
+        pool:
+          vmImage: 'ubuntu-latest'
+        steps:
+          # Escaneo "baseline" de OWASP ZAP: pasivo (no ataca ni modifica datos),
+          # revisa cabeceras, cookies y configuración según el OWASP Top 10.
+          - script: |
+              OUT="$(Build.ArtifactStagingDirectory)/zap"
+              mkdir -p "$OUT" && chmod 777 "$OUT"
+              docker run --rm -v "$OUT":/zap/wrk:rw -t ghcr.io/zaproxy/zaproxy:stable \
+                zap-baseline.py -t "https://yourbus-back-qa2-hqhuezhzaeceajd8.chilecentral-01.azurewebsites.net/api/rutas" -r reporte-zap.html -J reporte-zap.json -I
+            displayName: 'OWASP ZAP: escaneo baseline'
+            continueOnError: true
+
+          - publish: '$(Build.ArtifactStagingDirectory)/zap'
+            artifact: 'reporte-zap-back'
+            displayName: 'Publicar informe de ZAP'
+            condition: succeededOrFailed()
+
+  # ---------------------------------------------------------------------
+  # 7) DEPLOY PROD — solo si QA y los análisis de seguridad terminaron bien.
+  # ---------------------------------------------------------------------
+  - stage: Deploy_PROD
+    displayName: '7. Deploy - PROD'
+    dependsOn: Security_QA
     condition: succeeded()
     jobs:
       - deployment: DeployProd
