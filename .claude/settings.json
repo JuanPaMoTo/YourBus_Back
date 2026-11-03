@@ -1,0 +1,30 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run lint)",
+      "Bash(npm test)",
+      "Bash(npm test *)",
+      "Bash(git status *)",
+      "Bash(git diff *)",
+      "Bash(git log *)"
+    ],
+    "ask": [
+      "Bash(git commit *)",
+      "Bash(git push *)"
+    ],
+    "deny": [
+      "Read(./.env)",
+      "Read(./.env.local)",
+      "Edit(./.env)",
+      "Edit(./.env.local)",
+      "Bash(cat .env)",
+      "Bash(type .env)",
+      "Bash(Get-Content .env)",
+      "Bash(git add .)",
+      "Bash(git add -A)",
+      "Bash(git add --all)",
+      "Bash(* --no-verify*)",
+      "Bash(HUSKY=0 *)"
+    ]
+  }
+}
