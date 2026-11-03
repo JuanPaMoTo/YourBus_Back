@@ -3,6 +3,7 @@ const { listarRutas, estadoRuta } = require('../controllers/rutas.controller');
 const { listarParaderos, listarHorarios } = require('../controllers/paraderos.controller');
 const { busesActivos } = require('../controllers/recorrido.controller');
 const incidentesRoutes = require('./incidentes.routes');
+const configuracionRoutes = require('./configuracion.routes');
 
 const router = Router();
 
@@ -14,5 +15,6 @@ router.get('/rutas/:rutaId/buses-activos', busesActivos);
 
 // Los incidentes están asociados a las rutas: se montan junto a ellas.
 router.use(incidentesRoutes);
+router.use(configuracionRoutes);
 
 module.exports = router;
