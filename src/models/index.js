@@ -7,5 +7,6 @@ const Horario = require('./Horario');
 const Bus = require('./Bus');
 const Usuario = require('./Usuario');
 const Turno = require('./Turno');
+const Incidente = require('./Incidente');
 
-module.exports = { Ruta, Paradero, Horario, Bus, Usuario, Turno };
+module.exports = { Ruta, Paradero, Horario, Bus, Usuario, Turno, Incidente };

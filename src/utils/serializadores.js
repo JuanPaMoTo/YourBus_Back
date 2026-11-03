@@ -43,4 +43,22 @@ function serializarBusActivo(t, ahora = Date.now()) {
   };
 }
 
-module.exports = { serializarTurno, serializarBusActivo };
+// Incidente (con populate + lean). "interno" añade quién lo reportó: solo para el
+// administrador; el público no ve datos del conductor.
+function serializarIncidente(i, { interno = false } = {}) {
+  const dato = {
+    id: idDe(i),
+    tipo: i.tipo,
+    descripcion: i.descripcion,
+    estado: i.estado,
+    creadoEn: i.createdAt,
+    finalizadoEn: i.finalizadoEn,
+    ruta: i.rutaId ? { id: idDe(i.rutaId), codigo: i.rutaId.codigo, nombre: i.rutaId.nombre } : null,
+  };
+  if (interno) {
+    dato.reportadoPor = i.reportadoPor ? { id: idDe(i.reportadoPor), nombre: i.reportadoPor.nombre } : null;
+  }
+  return dato;
+}
+
+module.exports = { serializarTurno, serializarBusActivo, serializarIncidente };

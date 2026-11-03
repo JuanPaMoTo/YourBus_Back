@@ -26,4 +26,4 @@ API REST de YourBus: Node.js + Express 4 + MongoDB Atlas (Mongoose). Rutas, para
 1 Compile/Build → 2 Quality Gates (lint, pruebas, SonarCloud) → 3 Package → 4 Deploy DEV → 5 Deploy QA → 6 Seguridad (ZAP sobre QA) → 7 Deploy PROD. Archivo: `.pipeline/azure-pipelines.yml`.
 
 ## Pendiente (al 2 de noviembre de 2026, según el tablero y el código)
-No existen modelo ni endpoints de incidentes ni de alertas (HU14, HU15, HU16, HU08, HU07). Paraderos y horarios son solo lectura (HU12 y HU13 piden administrarlos). HU18: el turno guarda la velocidad, pero el cálculo de ETA todavía no la usa.
+Incidentes implementados (HU14, HU15, HU16, HU08; HU07 cubierta como aviso dentro de la app, sin notificaciones push): modelo `Incidente`, `GET /api/incidentes/activos` y `GET /api/rutas/:rutaId/incidentes` (públicos), `POST /api/incidentes` (conductor/admin), `GET /api/incidentes` y `PATCH /api/incidentes/:id/estado` (admin). Sus rutas se montan desde `rutas.routes.js`. Paraderos y horarios son solo lectura (HU12 y HU13 piden administrarlos). HU18: el turno guarda la velocidad, pero el cálculo de ETA todavía no la usa.
