@@ -1,4 +1,22 @@
-# YourBus_Back
+# YourBus — Backend (API REST)
+
+> Sabe exactamente cuándo llega tu bus intermunicipal: ubicación en vivo y tiempo estimado de llegada a tu paradero.
+
+**Producto en funcionamiento:** https://yourbus-front-prod-ckeqapbpexdpfkbb.chilecentral-01.azurewebsites.net/
+(la primera carga puede tardar unos 15 segundos mientras el servidor despierta)
+
+![Captura de YourBus: mapa en vivo con el tiempo estimado de llegada](docs/captura-yourbus.png)
+
+## Tecnologías usadas
+
+- Node.js 20, Express y Helmet
+- MongoDB Atlas con Mongoose
+- JWT para sesiones con roles (pasajero, conductor, administrador)
+- OSRM para calcular el tiempo estimado de llegada por calles
+- Jest, Supertest y mongodb-memory-server (pruebas), Husky (hooks de Git)
+- Azure App Service y Azure DevOps Pipelines, SonarCloud y OWASP ZAP
+
+## Detalle técnico
 
 API REST del sistema de transporte público **YourBus**, construida con Node.js, Express y **MongoDB (Mongoose)**, alojada en MongoDB Atlas. Expone rutas, paraderos, horarios, **cuentas con roles** (pasajero, conductor, administrador de terminal), **turnos**, **recorrido en vivo con GPS** y **ETA por calles**, consumidos por [`YourBus_Front`](../YourBus_Front).
 
@@ -151,3 +169,23 @@ Los pasos exactos de la interfaz pueden variar; si la versión de la extensión 
 ## Despliegue
 
 Ver `.pipeline/azure-pipelines.yml` para el pipeline de CI/CD (Build → Package → Deploy, con promoción DEV → QA → PROD). Cada entorno usa su propia variable `MONGODB_URI_<ENV>` en la variable group `YourBus-Backend-Vars`. Además deben existir `JWT_SECRET`, `ADMIN_EMAIL` y `ADMIN_PASSWORD` (las dos secretas marcadas con el candado). Evita comillas y el símbolo `$` en `ADMIN_PASSWORD`, porque el pipeline la pasa como texto a la configuración de la app.
+
+## Referencias
+
+Microsoft. (s.f.). *Azure App Service documentation*. Microsoft Learn. https://learn.microsoft.com/en-us/azure/app-service/
+
+MongoDB. (s.f.). *MongoDB Atlas documentation*. https://www.mongodb.com/docs/atlas/
+
+Morales Torres, J. P. (2026a). *YourBus_Back* [Software]. GitHub. https://github.com/JuanPaMoTo/YourBus_Back
+
+Morales Torres, J. P. (2026b). *YourBus_Front* [Software]. GitHub. https://github.com/JuanPaMoTo/YourBus_Front
+
+OpenStreetMap contributors. (s.f.). *OpenStreetMap*. https://www.openstreetmap.org/copyright
+
+Project OSRM. (s.f.). *Open Source Routing Machine*. https://project-osrm.org
+
+Express. (s.f.). *Express: Fast, unopinionated, minimalist web framework for Node.js*. https://expressjs.com
+
+Mongoose. (s.f.). *Mongoose: Elegant MongoDB object modeling for Node.js*. https://mongoosejs.com
+
+OpenJS Foundation. (s.f.). *Node.js*. https://nodejs.org
